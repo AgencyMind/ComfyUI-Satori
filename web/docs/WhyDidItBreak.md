@@ -1,4 +1,4 @@
-# why did i break?
+# why did it break?
 
 Diagnostic node that tells you what's actually happening to your image data when workflows start acting weird.
 
@@ -46,7 +46,7 @@ Drop this node anywhere in your workflow when:
 
 Place after ImageBlend nodes to measure brightness amplification:
 ```
-Load Image → ImageBlend (screen mode) → why did i break? → your workflow continues...
+Load Image → ImageBlend (screen mode) → why did it break? → your workflow continues...
 ```
 
 The overlay shows immediate visual feedback, the report explains what's wrong, and the stats give you precise numbers for systematic analysis.

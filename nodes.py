@@ -9,7 +9,7 @@ import os
 # Web directory for custom UI components
 WEB_DIRECTORY = "./web"
 
-class WhyDidIBreak:
+class WhyDidItBreak:
     """
     Diagnostic node that analyzes IMAGE tensors and provides both visual and numerical feedback
     about brightness, channels, clipping, and tensor health.
@@ -30,7 +30,7 @@ class WhyDidIBreak:
     RETURN_TYPES = ("IMAGE", "STRING", "STRING")
     RETURN_NAMES = ("image", "report", "stats")
     FUNCTION = "analyze"
-    CATEGORY = "satori"
+    CATEGORY = "ComfyUI-Satori"
     
     def analyze(self, image, show_overlay=True, analysis_depth="quick"):
         """
@@ -270,9 +270,9 @@ class WhyDidIBreak:
 
 # Node registration
 NODE_CLASS_MAPPINGS = {
-    "WhyDidIBreak": WhyDidIBreak
+    "WhyDidItBreak": WhyDidItBreak
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "WhyDidIBreak": "why did i break?"
+    "WhyDidItBreak": "why did it break?"
 }
