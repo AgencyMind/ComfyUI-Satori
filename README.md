@@ -1,4 +1,4 @@
-# Satori
+# ComfyUI-Satori
 
 Diagnostic nodes for ComfyUI workflows.
 
