@@ -239,21 +239,7 @@ app.registerExtension({
                     box-sizing: border-box;
                 `;
                 
-                // Force minimum node size
-                if (this.size) {
-                    if (this.size[0] < 380) {
-                        this.size[0] = 380;
-                    }
-                    // Calculate height based on widget needs
-                    // Base height for inputs + widget container + padding
-                    const baseHeight = 120; // Approximate height of inputs/header
-                    const widgetHeight = 220; // Widget min-height + margins
-                    const totalHeight = baseHeight + widgetHeight;
-                    
-                    if (this.size[1] < totalHeight) {
-                        this.size[1] = totalHeight;
-                    }
-                }
+                // Let ComfyUI handle node sizing naturally
                 
                 // Add scanline effect
                 const scanlines = document.createElement("div");
@@ -294,7 +280,13 @@ app.registerExtension({
                 
                 // Default loading animation
                 const animateLoading = () => {
-                    if (!this.investigation_data && this.satori_display) {
+                    // Check if we have real data or just the default empty object
+                    const hasRealData = this.investigation_data && 
+                                       (this.investigation_data.id || 
+                                        this.investigation_data.findings || 
+                                        this.investigation_data.timestamp);
+                    
+                    if (!hasRealData && this.satori_display) {
                         // Check container width for responsive display
                         const containerWidth = this.satori_container.offsetWidth;
                         const isNarrow = containerWidth < 300;
@@ -420,7 +412,18 @@ app.registerExtension({
                         this.loadingInterval = null;
                     }
                     
-                    if (!this.investigation_data || !this.satori_display) return;
+                    if (!this.satori_display) return;
+                    
+                    // Check if we have real data or just the default empty object
+                    const hasRealData = this.investigation_data && 
+                                       (this.investigation_data.id || 
+                                        this.investigation_data.findings || 
+                                        this.investigation_data.timestamp);
+                    
+                    if (!hasRealData) {
+                        // Keep showing loading animation
+                        return;
+                    }
                     
                     const data = this.investigation_data;
                     const findings = data.findings || {};
