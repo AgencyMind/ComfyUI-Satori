@@ -234,9 +234,29 @@ app.registerExtension({
                     font-size: 11px;
                     color: ${RETROTECH_COLORS.phosphor_green};
                     min-height: 200px;
+                    max-height: 400px;
+                    width: 100%;
                     position: relative;
-                    overflow: hidden;
+                    overflow-x: hidden;
+                    overflow-y: auto;
+                    box-sizing: border-box;
                 `;
+                
+                // Force minimum node size
+                if (this.size) {
+                    if (this.size[0] < 380) {
+                        this.size[0] = 380;
+                    }
+                    // Calculate height based on widget needs
+                    // Base height for inputs + widget container + padding
+                    const baseHeight = 120; // Approximate height of inputs/header
+                    const widgetHeight = 220; // Widget min-height + margins
+                    const totalHeight = baseHeight + widgetHeight;
+                    
+                    if (this.size[1] < totalHeight) {
+                        this.size[1] = totalHeight;
+                    }
+                }
                 
                 // Add scanline effect
                 const scanlines = document.createElement("div");
@@ -266,6 +286,8 @@ app.registerExtension({
                     z-index: 2;
                     white-space: pre;
                     line-height: 1.2;
+                    overflow-x: auto;
+                    overflow-y: hidden;
                 `;
                 container.appendChild(display);
                 
@@ -278,42 +300,66 @@ app.registerExtension({
                 // Default loading animation
                 const animateLoading = () => {
                     if (!this.investigation_data && this.satori_display) {
-                        // Main loading frame
-                        const mainFrame = LOADING_FRAMES[Math.floor(loadingFrame) % LOADING_FRAMES.length];
-                        
-                        // Dynamic displays
-                        const dynamicDisplay = loadingDisplays[currentDisplay].render(loadingPhase);
+                        // Check container width for responsive display
+                        const containerWidth = this.satori_container.offsetWidth;
+                        const isNarrow = containerWidth < 300;
                         
                         // Combine displays
                         this.satori_display.innerHTML = '';
                         
-                        // Main frame
-                        const mainDiv = document.createElement("div");
-                        mainDiv.style.color = RETROTECH_COLORS.phosphor_amber;
-                        mainDiv.textContent = mainFrame;
-                        this.satori_display.appendChild(mainDiv);
-                        
-                        // Dynamic display
-                        const dynDiv = document.createElement("div");
-                        dynDiv.style.cssText = `
-                            color: ${RETROTECH_COLORS.phosphor_green};
-                            margin-top: 8px;
-                            text-shadow: 0 0 3px ${RETROTECH_COLORS.phosphor_green};
-                        `;
-                        dynDiv.textContent = dynamicDisplay;
-                        this.satori_display.appendChild(dynDiv);
-                        
-                        // Status line
-                        const statusDiv = document.createElement("div");
-                        statusDiv.style.cssText = `
-                            color: ${RETROTECH_COLORS.vapor_cyan};
-                            margin-top: 8px;
-                            font-size: 10px;
-                            text-align: center;
-                        `;
-                        const dots = '.'.repeat((Math.floor(loadingPhase * 2) % 4));
-                        statusDiv.textContent = `READY FOR INVESTIGATION${dots}`;
-                        this.satori_display.appendChild(statusDiv);
+                        if (isNarrow) {
+                            // Simplified display for narrow nodes
+                            const simpleDiv = document.createElement("div");
+                            simpleDiv.style.cssText = `
+                                color: ${RETROTECH_COLORS.phosphor_amber};
+                                text-align: center;
+                                padding: 20px 0;
+                            `;
+                            simpleDiv.innerHTML = `
+                                SATORI DIAGNOSTIC<br>
+                                <span style="color: ${RETROTECH_COLORS.phosphor_green}">
+                                ${generateOscilloscopeWave(20, loadingPhase)}
+                                </span><br>
+                                <span style="font-size: 10px; color: ${RETROTECH_COLORS.vapor_cyan}">
+                                INITIALIZING...
+                                </span>
+                            `;
+                            this.satori_display.appendChild(simpleDiv);
+                        } else {
+                            // Full display for wider nodes
+                            const mainFrame = LOADING_FRAMES[Math.floor(loadingFrame) % LOADING_FRAMES.length];
+                            
+                            // Dynamic displays
+                            const dynamicDisplay = loadingDisplays[currentDisplay].render(loadingPhase);
+                            
+                            // Main frame
+                            const mainDiv = document.createElement("div");
+                            mainDiv.style.color = RETROTECH_COLORS.phosphor_amber;
+                            mainDiv.textContent = mainFrame;
+                            this.satori_display.appendChild(mainDiv);
+                            
+                            // Dynamic display
+                            const dynDiv = document.createElement("div");
+                            dynDiv.style.cssText = `
+                                color: ${RETROTECH_COLORS.phosphor_green};
+                                margin-top: 8px;
+                                text-shadow: 0 0 3px ${RETROTECH_COLORS.phosphor_green};
+                            `;
+                            dynDiv.textContent = dynamicDisplay;
+                            this.satori_display.appendChild(dynDiv);
+                            
+                            // Status line
+                            const statusDiv = document.createElement("div");
+                            statusDiv.style.cssText = `
+                                color: ${RETROTECH_COLORS.vapor_cyan};
+                                margin-top: 8px;
+                                font-size: 10px;
+                                text-align: center;
+                            `;
+                            const dots = '.'.repeat((Math.floor(loadingPhase * 2) % 4));
+                            statusDiv.textContent = `READY FOR INVESTIGATION${dots}`;
+                            this.satori_display.appendChild(statusDiv);
+                        }
                         
                         // Update animation state
                         loadingPhase += 0.05;
