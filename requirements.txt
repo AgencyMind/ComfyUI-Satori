@@ -1,1 +1,2 @@
-matplotlib>=3.10.0
+# No additional requirements - uses only standard library and ComfyUI built-ins
+# numpy and torch are provided by ComfyUI

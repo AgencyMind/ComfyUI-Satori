@@ -1,18 +1,55 @@
+"""
+ComfyUI-Satori: Investigative Infrastructure for Creative Workflows
+Based on the Green Tree Restaurant principle - create conditions for discovery
+"""
+
 import torch
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-import io
-import os
+import json
+from collections import deque
+import time
 
 # Web directory for custom UI components
 WEB_DIRECTORY = "./web"
 
+class InvestigationContext:
+    """Tracks data through pipeline stages for pattern discovery"""
+    def __init__(self):
+        self.history = deque(maxlen=100)  # Rolling window of measurements
+        self.patterns = {}  # Discovered patterns
+        self.timestamps = deque(maxlen=100)  # Timing data
+        
+    def record(self, data):
+        """Record investigation data without interpretation"""
+        self.history.append(data)
+        self.timestamps.append(time.time())
+        
+    def get_temporal_delta(self, frames_back=1):
+        """Compare current with previous states"""
+        if len(self.history) >= frames_back + 1:
+            return {
+                'current': self.history[-1],
+                'previous': self.history[-frames_back-1],
+                'frames_back': frames_back
+            }
+        return None
+
+# Per-workflow investigation contexts to prevent data leakage
+investigation_contexts = {}
+MAX_CONTEXTS = 10  # Prevent memory leak from abandoned workflows
+
+def cleanup_old_contexts():
+    """Remove oldest contexts if we exceed maximum"""
+    if len(investigation_contexts) > MAX_CONTEXTS:
+        # Remove oldest half
+        sorted_keys = sorted(investigation_contexts.keys())
+        for key in sorted_keys[:len(sorted_keys)//2]:
+            del investigation_contexts[key]
+
 class WhyDidItBreak:
     """
-    Diagnostic node that analyzes IMAGE tensors and provides both visual and numerical feedback
-    about brightness, channels, clipping, and tensor health.
+    Investigative node that reveals what's happening in your workflow
+    without prescribing what you should look for
     """
     
     @classmethod
@@ -20,259 +57,250 @@ class WhyDidItBreak:
         return {
             "required": {
                 "image": ("IMAGE",),
+                "investigation_id": ("STRING", {"default": "investigation_1"}),
             },
             "optional": {
-                "show_overlay": ("BOOLEAN", {"default": True}),
-                "analysis_depth": (["quick", "thorough"], {"default": "quick"}),
+                "analysis_modes": ("STRING", {
+                    "default": "tensor,temporal,patterns",
+                    "multiline": False
+                }),
+                "frame_memory": ("INT", {"default": 10, "min": 1, "max": 100}),
             }
         }
     
-    RETURN_TYPES = ("IMAGE", "STRING", "STRING")
-    RETURN_NAMES = ("image", "report", "stats")
-    FUNCTION = "analyze"
+    RETURN_TYPES = ("IMAGE",)  # Only passthrough - display happens on node
+    RETURN_NAMES = ("image",)
+    FUNCTION = "investigate"
     CATEGORY = "ComfyUI-Satori"
+    OUTPUT_NODE = True  # Important: allows execution without output connections
     
-    def analyze(self, image, show_overlay=True, analysis_depth="quick"):
+    def investigate(self, image, investigation_id, analysis_modes="tensor,temporal,patterns", frame_memory=10):
         """
-        Analyze IMAGE tensor and return diagnostic information
+        Investigate without assumptions about what matters
+        All display happens via JavaScript widgets
         """
-        # Convert tensor to numpy for analysis
-        if isinstance(image, torch.Tensor):
-            # ComfyUI IMAGE format is [batch, height, width, channels]
-            img_np = image.cpu().numpy()
-        else:
-            img_np = np.array(image)
         
-        # Handle batch dimension
-        if len(img_np.shape) == 4:
-            img_np = img_np[0]  # Take first image in batch
+        # Parse analysis modes (limit to prevent DoS)
+        modes = [m.strip() for m in analysis_modes.split(',')[:10]]  # Max 10 modes
         
-        # Ensure we have [H, W, C] format
-        if len(img_np.shape) != 3 or img_np.shape[2] != 3:
-            return (image, "Error: Expected RGB image with shape [H, W, 3]", "")
+        # Sanitize investigation_id to prevent XSS
+        safe_id = str(investigation_id)[:50].replace('<', '').replace('>', '').replace('"', '').replace("'", '')
         
-        # Basic statistics
-        stats = self._calculate_stats(img_np, analysis_depth)
-        
-        # Generate human-readable report
-        report = self._generate_report(stats)
-        
-        # Create output image with optional overlay
-        if show_overlay:
-            output_image = self._create_overlay(image, img_np, stats)
-        else:
-            output_image = image
-        
-        # Generate machine-readable stats
-        stats_str = self._format_stats(stats)
-        
-        return (output_image, report, stats_str)
-    
-    def _calculate_stats(self, img_np, depth):
-        """Calculate image statistics"""
-        stats = {}
-        
-        # Basic brightness stats
-        stats['mean'] = float(np.mean(img_np))
-        stats['min'] = float(np.min(img_np))
-        stats['max'] = float(np.max(img_np))
-        stats['std'] = float(np.std(img_np))
-        
-        # Clipping analysis
-        stats['clipped_blacks'] = float(np.mean(img_np == 0.0))
-        stats['clipped_whites'] = float(np.mean(img_np == 1.0))
-        
-        # Channel analysis
-        stats['channels'] = {
-            'r_mean': float(np.mean(img_np[:, :, 0])),
-            'g_mean': float(np.mean(img_np[:, :, 1])),
-            'b_mean': float(np.mean(img_np[:, :, 2]))
+        # Prepare investigation data
+        investigation_data = {
+            'id': safe_id,
+            'timestamp': time.time(),
+            'modes': modes,
+            'findings': {}
         }
         
-        if depth == "thorough":
-            # Percentile analysis
-            stats['percentiles'] = {
-                '1%': float(np.percentile(img_np, 1)),
-                '5%': float(np.percentile(img_np, 5)),
-                '25%': float(np.percentile(img_np, 25)),
-                '75%': float(np.percentile(img_np, 75)),
-                '95%': float(np.percentile(img_np, 95)),
-                '99%': float(np.percentile(img_np, 99))
+        # Tensor investigation - what's actually in the data?
+        if 'tensor' in modes:
+            investigation_data['findings']['tensor'] = self._investigate_tensor(image)
+            
+        # Get or create workflow-specific context
+        workflow_id = getattr(self, 'workflow_id', 'default')
+        if workflow_id not in investigation_contexts:
+            cleanup_old_contexts()  # Prevent memory leak
+            investigation_contexts[workflow_id] = InvestigationContext()
+        context = investigation_contexts[workflow_id]
+        
+        # Temporal investigation - what changed?
+        if 'temporal' in modes and len(context.history) > 0:
+            investigation_data['findings']['temporal'] = self._investigate_temporal(image, context)
+            
+        # Pattern investigation - what repeats or stands out?
+        if 'patterns' in modes:
+            investigation_data['findings']['patterns'] = self._investigate_patterns(image)
+            
+        # Record for future investigations
+        context.record({
+            'tensor_hash': self._tensor_hash(image),
+            'stats': investigation_data['findings'].get('tensor', {}),
+            'investigation_id': safe_id
+        })
+        
+        # Store data for JavaScript widget to display
+        self.investigation_data = investigation_data
+        
+        # Return image unchanged - investigation is about observation not modification
+        return {"ui": {"investigation_data": investigation_data}, "result": (image,)}
+    
+    def _investigate_tensor(self, tensor):
+        """Reveal tensor characteristics without interpretation"""
+        # Convert to numpy for analysis
+        if isinstance(tensor, torch.Tensor):
+            data = tensor.cpu().numpy()
+        else:
+            data = np.array(tensor)
+            
+        # Get basic shape info
+        findings = {
+            'shape': list(data.shape),
+            'dtype': str(data.dtype),
+            'device': str(tensor.device) if isinstance(tensor, torch.Tensor) else 'cpu',
+        }
+        
+        # Statistical landscape
+        flat_data = data.flatten()
+        findings['landscape'] = {
+            'min': float(np.min(flat_data)),
+            'max': float(np.max(flat_data)),
+            'mean': float(np.mean(flat_data)),
+            'median': float(np.median(flat_data)),
+            'std': float(np.std(flat_data)),
+        }
+        
+        # Distribution insights
+        findings['distribution'] = {
+            'unique_values': int(np.unique(flat_data).size),
+            'zeros': float(np.sum(flat_data == 0) / flat_data.size),
+            'ones': float(np.sum(flat_data == 1) / flat_data.size),
+        }
+        
+        # Percentile mapping
+        percentiles = [1, 5, 25, 50, 75, 95, 99]
+        findings['percentiles'] = {
+            f'p{p}': float(np.percentile(flat_data, p)) 
+            for p in percentiles
+        }
+        
+        # Channel investigation if applicable
+        if len(data.shape) >= 3 and data.shape[-1] in [3, 4]:
+            findings['channels'] = self._investigate_channels(data)
+            
+        return findings
+    
+    def _investigate_temporal(self, tensor, context):
+        """Discover changes over time without assuming what matters"""
+        current_hash = self._tensor_hash(tensor)
+        
+        # Find how this differs from recent history
+        findings = {
+            'changes_detected': [],
+            'stability_score': 0.0,
+            'pattern_breaks': []
+        }
+        
+        # Look for changes at different time scales
+        for frames_back in [1, 5, 10]:
+            delta = context.get_temporal_delta(frames_back)
+            if delta:
+                change_magnitude = self._calculate_change(
+                    delta['current'].get('stats', {}),
+                    delta['previous'].get('stats', {})
+                )
+                findings['changes_detected'].append({
+                    'frames_back': frames_back,
+                    'magnitude': change_magnitude
+                })
+                
+        return findings
+    
+    def _investigate_patterns(self, tensor):
+        """Look for patterns without prescribing what patterns mean"""
+        findings = {
+            'spatial_patterns': [],
+            'value_clusters': [],
+            'anomaly_scores': {}
+        }
+        
+        # This is where pattern detection would happen
+        # For now, return structure for future expansion
+        
+        return findings
+    
+    def _investigate_channels(self, data):
+        """Channel-wise investigation"""
+        channels = {}
+        channel_names = ['red', 'green', 'blue', 'alpha'] if data.shape[-1] == 4 else ['red', 'green', 'blue']
+        
+        for i, name in enumerate(channel_names[:data.shape[-1]]):
+            channel_data = data[..., i].flatten()
+            channels[name] = {
+                'mean': float(np.mean(channel_data)),
+                'std': float(np.std(channel_data)),
+                'active': float(np.sum(channel_data > 0.01) / channel_data.size)
             }
             
-            # Histogram data
-            hist, bins = np.histogram(img_np, bins=50, range=(0, 1))
-            stats['histogram'] = {
-                'counts': hist.tolist(),
-                'bins': bins.tolist()
+        # Channel relationships
+        if data.shape[-1] >= 3:
+            channels['balance'] = {
+                'rg_correlation': float(np.corrcoef(data[..., 0].flatten(), data[..., 1].flatten())[0, 1]),
+                'gb_correlation': float(np.corrcoef(data[..., 1].flatten(), data[..., 2].flatten())[0, 1]),
+                'rb_correlation': float(np.corrcoef(data[..., 0].flatten(), data[..., 2].flatten())[0, 1]),
             }
-        
-        return stats
-    
-    def _generate_report(self, stats):
-        """Generate human-readable diagnostic report"""
-        report = []
-        
-        # Brightness analysis
-        mean_bright = stats['mean']
-        if mean_bright > 0.8:
-            report.append(f"Very bright image (avg {mean_bright:.2f}) - check for overexposure")
-        elif mean_bright < 0.2:
-            report.append(f"Very dark image (avg {mean_bright:.2f}) - check if intentional")
-        else:
-            report.append(f"Brightness looks normal (avg {mean_bright:.2f})")
-        
-        # Clipping warnings
-        if stats['clipped_whites'] > 0.01:  # More than 1% clipped
-            report.append(f"WARNING: {stats['clipped_whites']*100:.1f}% pixels clipped to white")
-        
-        if stats['clipped_blacks'] > 0.01:
-            report.append(f"WARNING: {stats['clipped_blacks']*100:.1f}% pixels clipped to black")
-        
-        # Channel balance
-        channels = stats['channels']
-        r, g, b = channels['r_mean'], channels['g_mean'], channels['b_mean']
-        max_diff = max(r, g, b) - min(r, g, b)
-        
-        if max_diff > 0.1:
-            report.append(f"Color imbalance detected (R:{r:.2f} G:{g:.2f} B:{b:.2f})")
-        else:
-            report.append("Channels look balanced")
-        
-        # Contrast analysis
-        if stats['std'] < 0.05:
-            report.append("Very low contrast - image might be washed out")
-        elif stats['std'] > 0.3:
-            report.append("Very high contrast - check for artifacts")
-        
-        return " | ".join(report)
-    
-    def _create_overlay(self, original_tensor, img_np, stats):
-        """Create visual diagnostic overlay on the image"""
-        h, w, c = img_np.shape
-        
-        # Create brightness heatmap
-        brightness = np.mean(img_np, axis=2)  # Convert to grayscale
-        
-        # Create overlay image with multiple diagnostic elements
-        overlay = np.zeros((h, w, 4), dtype=np.float32)  # RGBA
-        
-        # 1. Clipping visualization - highlight problem areas
-        if stats['clipped_whites'] > 0.001:  # If any white clipping
-            white_clipped = np.all(img_np >= 0.99, axis=2)
-            overlay[white_clipped] = [1.0, 0.2, 0.2, 0.6]  # Red overlay
-        
-        if stats['clipped_blacks'] > 0.001:  # If any black clipping
-            black_clipped = np.all(img_np <= 0.01, axis=2)
-            overlay[black_clipped] = [0.2, 0.2, 1.0, 0.6]  # Blue overlay
-        
-        # 2. Create histogram in corner
-        hist_size = min(w//4, h//4, 120)
-        hist_x = w - hist_size - 10
-        hist_y = 10
-        
-        self._draw_histogram(overlay, img_np, hist_x, hist_y, hist_size, stats)
-        
-        # 3. Channel balance indicators
-        self._draw_channel_bars(overlay, w, h, stats)
-        
-        # 4. Critical warnings only (minimal text)
-        warnings = []
-        if stats['clipped_whites'] > 0.05:
-            warnings.append(f"WHITE CLIP {stats['clipped_whites']*100:.0f}%")
-        if stats['clipped_blacks'] > 0.05:
-            warnings.append(f"BLACK CLIP {stats['clipped_blacks']*100:.0f}%")
-        if stats['mean'] > 0.9:
-            warnings.append("OVEREXPOSED")
-        elif stats['mean'] < 0.1:
-            warnings.append("UNDEREXPOSED")
-        
-        if warnings:
-            self._draw_warnings(overlay, warnings, w, h)
-        
-        # Convert to PIL and composite
-        img_pil = Image.fromarray((img_np * 255).astype(np.uint8))
-        overlay_pil = Image.fromarray((overlay * 255).astype(np.uint8), 'RGBA')
-        
-        result = Image.alpha_composite(img_pil.convert('RGBA'), overlay_pil)
-        
-        # Convert back to tensor
-        result_np = np.array(result.convert('RGB')).astype(np.float32) / 255.0
-        return torch.from_numpy(result_np).unsqueeze(0)
-    
-    def _draw_histogram(self, overlay, img_np, x, y, size, stats):
-        """Draw small histogram in corner"""
-        # Calculate histogram
-        hist, bins = np.histogram(img_np, bins=32, range=(0, 1))
-        hist = hist / np.max(hist)  # Normalize
-        
-        # Draw histogram background
-        overlay[y:y+size, x:x+size] = [0, 0, 0, 0.7]
-        
-        # Draw histogram bars
-        bar_width = size // 32
-        for i, height in enumerate(hist):
-            bar_height = int(height * size * 0.8)
-            bar_x = x + i * bar_width
-            bar_y = y + size - bar_height
             
-            # Color bars based on brightness level
-            brightness_level = i / 32
-            if brightness_level < 0.1:
-                color = [0.3, 0.3, 1.0, 0.8]  # Blue for shadows
-            elif brightness_level > 0.9:
-                color = [1.0, 0.3, 0.3, 0.8]  # Red for highlights
-            else:
-                color = [0.8, 0.8, 0.8, 0.8]  # Gray for midtones
+        return channels
+    
+    def _tensor_hash(self, tensor):
+        """Create a hash for comparing tensors"""
+        if isinstance(tensor, torch.Tensor):
+            return hash(tuple(tensor.shape) + (tensor.sum().item(),))
+        else:
+            return hash(tuple(tensor.shape) + (np.sum(tensor),))
+    
+    def _calculate_change(self, current_stats, previous_stats):
+        """Calculate magnitude of change between states"""
+        if not current_stats or not previous_stats:
+            return 0.0
             
-            if bar_height > 0:
-                overlay[bar_y:y+size, bar_x:bar_x+bar_width] = color
+        # Compare landscapes
+        current_landscape = current_stats.get('landscape', {})
+        previous_landscape = previous_stats.get('landscape', {})
+        
+        changes = []
+        for key in ['mean', 'std', 'min', 'max']:
+            if key in current_landscape and key in previous_landscape:
+                if previous_landscape[key] != 0:
+                    change = abs(current_landscape[key] - previous_landscape[key]) / abs(previous_landscape[key])
+                    changes.append(change)
+                    
+        return float(np.mean(changes)) if changes else 0.0
+
+
+class TemporalInvestigator:
+    """
+    Specialized node for frame-by-frame investigation
+    Useful for FOUC-type issues where timing matters
+    """
     
-    def _draw_channel_bars(self, overlay, w, h, stats):
-        """Draw R/G/B channel indicators"""
-        channels = stats['channels']
-        bar_height = 8
-        bar_width = 60
-        spacing = 12
-        start_y = h - 40
-        start_x = 10
-        
-        colors = [(1.0, 0.3, 0.3, 0.8), (0.3, 1.0, 0.3, 0.8), (0.3, 0.3, 1.0, 0.8)]
-        values = [channels['r_mean'], channels['g_mean'], channels['b_mean']]
-        
-        for i, (color, value) in enumerate(zip(colors, values)):
-            y = start_y + i * spacing
-            # Background bar
-            overlay[y:y+bar_height, start_x:start_x+bar_width] = [0, 0, 0, 0.6]
-            # Value bar
-            value_width = int(value * bar_width)
-            overlay[y:y+bar_height, start_x:start_x+value_width] = color
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "frame_identifier": ("STRING", {"default": ""}),
+            },
+            "optional": {
+                "reference_frame": ("INT", {"default": 0, "min": 0}),
+                "comparison_window": ("INT", {"default": 5, "min": 1, "max": 50}),
+            }
+        }
     
-    def _draw_warnings(self, overlay, warnings, w, h):
-        """Draw critical warnings as colored indicators"""
-        # Simple colored warning dots in top-right
-        dot_size = 12
-        spacing = 16
-        start_x = w - 25
-        start_y = 10
-        
-        warning_color = [1.0, 0.8, 0.0, 0.9]  # Amber warning
-        
-        for i, warning in enumerate(warnings[:3]):  # Max 3 warnings
-            y = start_y + i * spacing
-            overlay[y:y+dot_size, start_x:start_x+dot_size] = warning_color
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    FUNCTION = "investigate_temporal"
+    CATEGORY = "ComfyUI-Satori"
+    OUTPUT_NODE = True
     
-    def _format_stats(self, stats):
-        """Format statistics as machine-readable string"""
-        import json
-        return json.dumps(stats, indent=2)
+    def investigate_temporal(self, image, frame_identifier="", reference_frame=0, comparison_window=5):
+        """
+        Track changes across frames without assuming what changes matter
+        """
+        # Implementation focused on temporal patterns
+        # Display happens via widgets
+        
+        return (image,)
 
 
 # Node registration
 NODE_CLASS_MAPPINGS = {
-    "WhyDidItBreak": WhyDidItBreak
+    "WhyDidItBreak": WhyDidItBreak,
+    "TemporalInvestigator": TemporalInvestigator,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "WhyDidItBreak": "why did it break?"
+    "WhyDidItBreak": "why did it break?",
+    "TemporalInvestigator": "temporal investigator",
 }
