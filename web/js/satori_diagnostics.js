@@ -1,5 +1,8 @@
 import { app } from "../../scripts/app.js";
 
+// Debug logging
+console.log("Satori diagnostics loading...");
+
 // Retrotech color schemes
 const RETROTECH_COLORS = {
     // Terminal phosphor
@@ -52,15 +55,170 @@ const BLOCKS = {
     t_left: '┤'
 };
 
+// Default loading screen frames for animation
+const LOADING_FRAMES = [
+    `
+╔══════════════════════════════╗
+║  SATORI DIAGNOSTIC SYSTEM    ║
+║    ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄    ║
+║   ▐░░░░░░░░░░░░░░░░░░░░▌   ║
+║   ▐░█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█░▌   ║
+║   ▐░▌               ▐░▌   ║
+║   ▐░▌ INITIALIZING  ▐░▌   ║
+║   ▐░▌               ▐░▌   ║
+║   ▐░█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█░▌   ║
+║   ▐░░░░░░░░░░░░░░░░░░░░▌   ║
+║    ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀    ║
+║                              ║
+║  [████████████░░░░░] 75%    ║
+╚══════════════════════════════╝`,
+    `
+╔══════════════════════════════╗
+║  SATORI DIAGNOSTIC SYSTEM    ║
+║    ╱╲    ╱╲    ╱╲    ╱╲    ║
+║   ╱  ╲  ╱  ╲  ╱  ╲  ╱  ╲   ║
+║  ╱    ╲╱    ╲╱    ╲╱    ╲  ║
+║  ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  ║
+║   SCANNING TENSOR SPACE...   ║
+║  ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  ║
+║  ╲    ╱╲    ╱╲    ╱╲    ╱  ║
+║   ╲  ╱  ╲  ╱  ╲  ╱  ╲  ╱   ║
+║    ╲╱    ╲╱    ╲╱    ╲╱    ║
+║                              ║
+║  [██████████████░░] 85%     ║
+╚══════════════════════════════╝`,
+    `
+╔══════════════════════════════╗
+║  SATORI DIAGNOSTIC SYSTEM    ║
+║   ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┐   ║
+║   │▓│░│▓│░│▓│░│▓│░│▓│░│   ║
+║   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤   ║
+║   │░│▓│░│▓│░│▓│░│▓│░│▓│   ║
+║   ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤   ║
+║   │▓│░│▓│░│▓│░│▓│░│▓│░│   ║
+║   └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘   ║
+║   PATTERN MATRIX: READY      ║
+║                              ║
+║  AWAITING INVESTIGATION...   ║
+║  [████████████████] 100%    ║
+╚══════════════════════════════╝`
+];
+
+// Oscilloscope-style waveform generator
+function generateOscilloscopeWave(width = 30, phase = 0) {
+    const wave = [];
+    for (let i = 0; i < width; i++) {
+        const x = (i / width) * Math.PI * 2 + phase;
+        const y = Math.sin(x) * 0.5 + Math.sin(x * 3) * 0.3 + Math.sin(x * 7) * 0.2;
+        const height = Math.floor((y + 1) * 4);
+        const char = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'][Math.max(0, Math.min(7, height))];
+        wave.push(char);
+    }
+    return wave.join('');
+}
+
+// VU meter style display
+function generateVUMeter(value = 0.5, width = 20) {
+    const filled = Math.floor(value * width);
+    const meter = [];
+    for (let i = 0; i < width; i++) {
+        if (i < filled) {
+            if (i < width * 0.6) meter.push('▪');
+            else if (i < width * 0.8) meter.push('▫');
+            else meter.push('▪');
+        } else {
+            meter.push('·');
+        }
+    }
+    return meter.join('');
+}
+
+// Create default loading display
+function createLoadingDisplay() {
+    const displays = [
+        {
+            type: 'oscilloscope',
+            render: (phase) => {
+                return `
+┌─ WAVEFORM ANALYZER ─────────┐
+│ ${generateOscilloscopeWave(28, phase)}│
+│ ${generateOscilloscopeWave(28, phase + 0.5)}│
+│ ${generateOscilloscopeWave(28, phase + 1.0)}│
+└─────────────────────────────┘`;
+            }
+        },
+        {
+            type: 'spectrum',
+            render: (phase) => {
+                const bars = [];
+                for (let i = 0; i < 8; i++) {
+                    const height = Math.floor((Math.sin(phase + i * 0.5) + 1) * 4);
+                    const bar = ['▁', '▃', '▅', '▇', '█'][Math.max(0, Math.min(4, height))];
+                    bars.push(bar.repeat(3));
+                }
+                return `
+┌─ SPECTRUM ANALYZER ─────────┐
+│ ${bars.join(' ')} │
+│ 1k  2k  4k  8k  16k 32k    │
+└─────────────────────────────┘`;
+            }
+        },
+        {
+            type: 'matrix',
+            render: (phase) => {
+                const matrix = [];
+                for (let y = 0; y < 3; y++) {
+                    const row = [];
+                    for (let x = 0; x < 10; x++) {
+                        const intensity = (Math.sin(phase + x * 0.3 + y * 0.7) + 1) * 0.5;
+                        if (intensity > 0.7) row.push('◆');
+                        else if (intensity > 0.4) row.push('◇');
+                        else row.push('·');
+                    }
+                    matrix.push(row.join(' '));
+                }
+                return `
+┌─ PATTERN MATRIX ────────────┐
+│ ${matrix[0]}     │
+│ ${matrix[1]}     │
+│ ${matrix[2]}     │
+└─────────────────────────────┘`;
+            }
+        },
+        {
+            type: 'meters',
+            render: (phase) => {
+                const cpu = Math.sin(phase * 1.2) * 0.3 + 0.5;
+                const mem = Math.sin(phase * 0.8) * 0.3 + 0.6;
+                const gpu = Math.sin(phase * 1.5) * 0.3 + 0.4;
+                return `
+┌─ SYSTEM MONITORS ───────────┐
+│ CPU [${generateVUMeter(cpu, 20)}]│
+│ MEM [${generateVUMeter(mem, 20)}]│
+│ GPU [${generateVUMeter(gpu, 20)}]│
+└─────────────────────────────┘`;
+            }
+        }
+    ];
+    
+    return displays;
+}
+
 // Satori diagnostic extension
 app.registerExtension({
     name: "ComfyUI-Satori.Diagnostics",
     
     async beforeRegisterNodeDef(nodeType, nodeData) {
+        console.log("Satori checking node:", nodeData.name);
+        
         if (nodeData.name === "WhyDidItBreak" || nodeData.name === "TemporalInvestigator") {
+            console.log("Satori: Hooking", nodeData.name);
+            
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             
             nodeType.prototype.onNodeCreated = function() {
+                console.log("Satori: Node created", this.type);
+                
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 
                 // Create investigative display widget
@@ -75,7 +233,7 @@ app.registerExtension({
                     font-family: 'Courier New', monospace;
                     font-size: 11px;
                     color: ${RETROTECH_COLORS.phosphor_green};
-                    min-height: 120px;
+                    min-height: 200px;
                     position: relative;
                     overflow: hidden;
                 `;
@@ -106,22 +264,106 @@ app.registerExtension({
                 display.style.cssText = `
                     position: relative;
                     z-index: 2;
+                    white-space: pre;
+                    line-height: 1.2;
                 `;
                 container.appendChild(display);
                 
-                // Add the widget to the node
-                this.addDOMWidget("satori_investigation", "div", container, {
-                    getValue: () => {
-                        return this.investigation_data || {};
-                    },
-                    setValue: (v) => {
-                        this.investigation_data = v;
-                        this.updateDisplay();
-                    },
-                    onDraw: () => {
-                        this.updateDisplay();
+                // Initialize with loading animation
+                let loadingPhase = 0;
+                let loadingFrame = 0;
+                const loadingDisplays = createLoadingDisplay();
+                let currentDisplay = 0;
+                
+                // Default loading animation
+                const animateLoading = () => {
+                    if (!this.investigation_data && this.satori_display) {
+                        // Main loading frame
+                        const mainFrame = LOADING_FRAMES[Math.floor(loadingFrame) % LOADING_FRAMES.length];
+                        
+                        // Dynamic displays
+                        const dynamicDisplay = loadingDisplays[currentDisplay].render(loadingPhase);
+                        
+                        // Combine displays
+                        this.satori_display.innerHTML = '';
+                        
+                        // Main frame
+                        const mainDiv = document.createElement("div");
+                        mainDiv.style.color = RETROTECH_COLORS.phosphor_amber;
+                        mainDiv.textContent = mainFrame;
+                        this.satori_display.appendChild(mainDiv);
+                        
+                        // Dynamic display
+                        const dynDiv = document.createElement("div");
+                        dynDiv.style.cssText = `
+                            color: ${RETROTECH_COLORS.phosphor_green};
+                            margin-top: 8px;
+                            text-shadow: 0 0 3px ${RETROTECH_COLORS.phosphor_green};
+                        `;
+                        dynDiv.textContent = dynamicDisplay;
+                        this.satori_display.appendChild(dynDiv);
+                        
+                        // Status line
+                        const statusDiv = document.createElement("div");
+                        statusDiv.style.cssText = `
+                            color: ${RETROTECH_COLORS.vapor_cyan};
+                            margin-top: 8px;
+                            font-size: 10px;
+                            text-align: center;
+                        `;
+                        const dots = '.'.repeat((Math.floor(loadingPhase * 2) % 4));
+                        statusDiv.textContent = `READY FOR INVESTIGATION${dots}`;
+                        this.satori_display.appendChild(statusDiv);
+                        
+                        // Update animation state
+                        loadingPhase += 0.05;
+                        loadingFrame += 0.03;
+                        currentDisplay = Math.floor(loadingPhase / 2) % loadingDisplays.length;
                     }
-                });
+                };
+                
+                // Start loading animation
+                this.loadingInterval = setInterval(animateLoading, 100);
+                animateLoading(); // Initial render
+                
+                // Try to add the widget - with error handling
+                try {
+                    console.log("Satori: Adding DOM widget");
+                    
+                    this.addDOMWidget("satori_investigation", "div", container, {
+                        getValue: () => {
+                            return this.investigation_data || {};
+                        },
+                        setValue: (v) => {
+                            console.log("Satori: setValue called", v);
+                            this.investigation_data = v;
+                            this.updateDisplay();
+                        },
+                        onDraw: () => {
+                            this.updateDisplay();
+                        }
+                    });
+                    
+                    console.log("Satori: DOM widget added successfully");
+                } catch (e) {
+                    console.error("Satori: Failed to add DOM widget", e);
+                    
+                    // Fallback: Try older widget method
+                    try {
+                        this.addCustomWidget({
+                            name: "satori_display",
+                            draw: function(ctx, node, widget_width, y, H) {
+                                // Canvas fallback - just show text
+                                ctx.fillStyle = RETROTECH_COLORS.phosphor_green;
+                                ctx.font = "12px monospace";
+                                ctx.fillText("Satori Investigation Active", 10, y + 20);
+                            }
+                        });
+                        console.log("Satori: Fallback widget added");
+                    } catch (e2) {
+                        console.error("Satori: Fallback also failed", e2);
+                    }
+                }
                 
                 // Store references
                 this.satori_display = display;
@@ -129,6 +371,14 @@ app.registerExtension({
                 
                 // Update display method
                 this.updateDisplay = function() {
+                    console.log("Satori: updateDisplay called", this.investigation_data);
+                    
+                    // Stop loading animation when we have data
+                    if (this.investigation_data && this.loadingInterval) {
+                        clearInterval(this.loadingInterval);
+                        this.loadingInterval = null;
+                    }
+                    
                     if (!this.investigation_data || !this.satori_display) return;
                     
                     const data = this.investigation_data;
@@ -137,15 +387,26 @@ app.registerExtension({
                     // Clear current display
                     this.satori_display.innerHTML = '';
                     
-                    // Header
+                    // Header with arcade-style graphics
+                    const headerContainer = document.createElement("div");
+                    headerContainer.style.cssText = `
+                        border: 2px solid ${RETROTECH_COLORS.phosphor_amber};
+                        padding: 4px;
+                        margin-bottom: 8px;
+                        text-align: center;
+                    `;
+                    
                     const header = document.createElement("div");
                     header.style.cssText = `
                         color: ${RETROTECH_COLORS.phosphor_amber};
-                        margin-bottom: 8px;
                         text-shadow: 0 0 8px ${RETROTECH_COLORS.phosphor_amber};
+                        font-size: 12px;
+                        font-weight: bold;
                     `;
-                    header.textContent = `◆ INVESTIGATION: ${data.id || 'unnamed'}`;
-                    this.satori_display.appendChild(header);
+                    header.textContent = `◆ INVESTIGATION: ${data.id || 'unnamed'} ◆`;
+                    headerContainer.appendChild(header);
+                    
+                    this.satori_display.appendChild(headerContainer);
                     
                     // Display findings based on modes
                     if (findings.tensor) {
@@ -196,7 +457,7 @@ app.registerExtension({
                     
                     const landscape = tensor.landscape;
                     const range = landscape.max - landscape.min;
-                    const mean_normalized = (landscape.mean - landscape.min) / range;
+                    const mean_normalized = range > 0 ? (landscape.mean - landscape.min) / range : 0;
                     
                     // Create histogram bar
                     const bar_width = 20;
@@ -350,22 +611,40 @@ app.registerExtension({
                 };
                 
                 // Pattern findings display (placeholder for now)
-                this.displayPatternFindings = function() {
+                this.displayPatternFindings = function(patterns) {
                     // Future implementation for pattern visualization
                 };
                 
-                // Hook into execution
+                // Hook into execution - FIX: Handle ComfyUI's ui structure
                 const onExecuted = this.onExecuted;
                 this.onExecuted = function(message) {
+                    console.log("Satori: onExecuted called", message);
+                    
                     onExecuted?.apply(this, arguments);
                     
                     // Update display with new investigation data
-                    if (message?.investigation_data) {
+                    // Handle both possible data locations
+                    if (message?.ui?.investigation_data) {
+                        console.log("Satori: Found data in ui.investigation_data");
+                        this.investigation_data = message.ui.investigation_data;
+                        this.updateDisplay();
+                    } else if (message?.investigation_data) {
+                        console.log("Satori: Found data in investigation_data");
                         this.investigation_data = message.investigation_data;
                         this.updateDisplay();
                     }
                 };
                 
+                // Cleanup on node removal
+                const onRemoved = this.onRemoved;
+                this.onRemoved = function() {
+                    if (this.loadingInterval) {
+                        clearInterval(this.loadingInterval);
+                    }
+                    onRemoved?.apply(this, arguments);
+                };
+                
+                console.log("Satori: Node setup complete");
                 return r;
             };
         }
@@ -373,6 +652,8 @@ app.registerExtension({
     
     // Add phosphor glow animation
     async setup() {
+        console.log("Satori: Extension setup");
+        
         const style = document.createElement("style");
         style.textContent = `
             @keyframes phosphor-glow {
@@ -395,7 +676,29 @@ app.registerExtension({
             .satori-display {
                 animation: flicker 0.15s infinite;
             }
+            
+            /* CRT curve effect */
+            .satori-investigation-container::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: radial-gradient(
+                    ellipse at center,
+                    transparent 0%,
+                    transparent 60%,
+                    rgba(0, 0, 0, 0.1) 100%
+                );
+                pointer-events: none;
+                z-index: 3;
+            }
         `;
         document.head.appendChild(style);
+        
+        console.log("Satori: Setup complete");
     }
 });
+
+console.log("Satori diagnostics loaded");
