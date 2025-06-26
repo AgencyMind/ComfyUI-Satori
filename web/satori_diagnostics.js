@@ -234,11 +234,8 @@ app.registerExtension({
                     font-size: 11px;
                     color: ${RETROTECH_COLORS.phosphor_green};
                     min-height: 200px;
-                    max-height: 400px;
-                    width: 100%;
                     position: relative;
-                    overflow-x: hidden;
-                    overflow-y: auto;
+                    overflow: hidden;
                     box-sizing: border-box;
                 `;
                 
@@ -286,8 +283,6 @@ app.registerExtension({
                     z-index: 2;
                     white-space: pre;
                     line-height: 1.2;
-                    overflow-x: auto;
-                    overflow-y: hidden;
                 `;
                 container.appendChild(display);
                 
