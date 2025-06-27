@@ -423,7 +423,10 @@ app.registerExtension({
                         this.loadingInterval = null;
                     }
                     
-                    if (!this.satori_display) return;
+                    if (!this.satori_display) {
+                        console.error("Satori: No display element!");
+                        return;
+                    }
                     
                     // Check if we have real data or just the default empty object
                     const hasRealData = this.investigation_data && 
@@ -431,7 +434,10 @@ app.registerExtension({
                                         this.investigation_data.findings || 
                                         this.investigation_data.timestamp);
                     
+                    console.log("Satori: hasRealData =", hasRealData, "data =", this.investigation_data);
+                    
                     if (!hasRealData) {
+                        console.log("Satori: No real data, keeping loading animation");
                         // Keep showing loading animation
                         return;
                     }
@@ -671,22 +677,35 @@ app.registerExtension({
                 };
                 
                 // Hook into execution - FIX: Handle ComfyUI's ui structure
-                const onExecuted = this.onExecuted;
+                const originalOnExecuted = this.onExecuted;
                 this.onExecuted = function(message) {
                     console.log("Satori: onExecuted called", message);
                     
-                    onExecuted?.apply(this, arguments);
+                    if (originalOnExecuted) {
+                        originalOnExecuted.apply(this, arguments);
+                    }
                     
                     // Update display with new investigation data
                     // Handle both possible data locations
                     if (message?.ui?.investigation_data) {
-                        console.log("Satori: Found data in ui.investigation_data");
+                        console.log("Satori: Found data in ui.investigation_data", message.ui.investigation_data);
                         this.investigation_data = message.ui.investigation_data;
                         this.updateDisplay();
                     } else if (message?.investigation_data) {
-                        console.log("Satori: Found data in investigation_data");
+                        console.log("Satori: Found data in investigation_data", message.investigation_data);
                         this.investigation_data = message.investigation_data;
                         this.updateDisplay();
+                    } else {
+                        console.log("Satori: No investigation data found in message", message);
+                    }
+                };
+                
+                // Also hook into onExecutionOutput if it exists
+                const originalOnExecutionOutput = this.onExecutionOutput;
+                this.onExecutionOutput = function(data) {
+                    console.log("Satori: onExecutionOutput called", data);
+                    if (originalOnExecutionOutput) {
+                        originalOnExecutionOutput.apply(this, arguments);
                     }
                 };
                 
