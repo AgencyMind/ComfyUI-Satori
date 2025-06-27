@@ -234,6 +234,8 @@ app.registerExtension({
                     font-size: 11px;
                     color: ${RETROTECH_COLORS.phosphor_green};
                     min-height: 200px;
+                    width: 350px;
+                    max-width: 100%;
                     position: relative;
                     overflow: hidden;
                     box-sizing: border-box;
@@ -369,11 +371,20 @@ app.registerExtension({
                         },
                         setValue: (v) => {
                             console.log("Satori: setValue called", v);
-                            this.investigation_data = v;
-                            this.updateDisplay();
+                            // Only set if we have real data, not empty objects
+                            if (v && (v.id || v.findings || v.timestamp)) {
+                                this.investigation_data = v;
+                                this.updateDisplay();
+                            }
                         },
                         onDraw: () => {
-                            this.updateDisplay();
+                            // Don't update if we don't have real data
+                            if (this.investigation_data && 
+                                (this.investigation_data.id || 
+                                 this.investigation_data.findings || 
+                                 this.investigation_data.timestamp)) {
+                                this.updateDisplay();
+                            }
                         }
                     });
                     
