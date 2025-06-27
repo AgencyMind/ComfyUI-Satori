@@ -365,7 +365,7 @@ app.registerExtension({
                     
                     this.addDOMWidget("satori_investigation", "div", container, {
                         getValue: () => {
-                            return this.investigation_data || {};
+                            return this.investigation_data;  // Return undefined instead of {}
                         },
                         setValue: (v) => {
                             console.log("Satori: setValue called", v);
